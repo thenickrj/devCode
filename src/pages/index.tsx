@@ -5,12 +5,61 @@ import ProblemsTable from "@/components/ProblemsTable/ProblemsTable";
 import { useState } from "react";
 import { doc, setDoc } from "firebase/firestore";
 import { firestore } from "@/firebase/firebase";
+import useHasMounted from "@/hooks/useHasMounted";
+import styled from "styled-components";
+import leftBG from "./../../public/images/home_codeBG1.png";
+import rightBG from "./../../public/images/home_codeBG2.png";
 
 const inter = Inter({ subsets: ["latin"] });
 
+const Container = styled.div`
+  main {
+    background: #ffffff;
+  }
+  .bg-dark-blue {
+    background: #b3dfff;
+  }
+  .bg-light-blue {
+    background: #b1d0e76e;
+  }
+  tr {
+    background: #2490dd;
+    text-align: center;
+  }
+  tbody {
+    color: #000000;
+  }
+  .leftBG {
+    position: absolute;
+    width: 340px;
+    top: 50%;
+    height: 300px;
+    z-index: 0;
+    left: -2%;
+  }
+
+  .rightBG {
+    position: absolute;
+    width: 340px;
+    top: 50%;
+    height: 300px;
+    z-index: 0;
+    right: 0;
+  }
+  table {
+    box-shadow: rgba(0, 0, 0, 0.35) 0px 5px 15px;
+    border-radius: 10px;
+  }
+  th {
+    font-weight: 600;
+    color: white;
+    text-align: center;
+  }
+`;
+
 export default function Home() {
   const [loadingProblems, setLoadingProblems] = useState(true);
-
+  const hasMounted = useHasMounted();
   const [inputs, setInputs] = useState({
     id: "",
     title: "",
@@ -22,6 +71,7 @@ export default function Home() {
     likes: 0,
     dislikes: 0,
   });
+  if (!hasMounted) return null;
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -41,7 +91,7 @@ export default function Home() {
     alert("Saved to db");
   };
   return (
-    <>
+    <Container>
       <main className="bg-dark-layer-2 min-h-screen">
         <Topbar problemPage={false} />
         <h1 className="text-2xl text-center text-gray-700 dark:text-gray-400 font-medium uppercase mt-10 mb-5">
@@ -80,6 +130,8 @@ export default function Home() {
             <ProblemsTable setLoadingProblems={setLoadingProblems} />
           </table>
         </div>
+        <Image className="leftBG" src={leftBG} alt="" />
+        <Image className="rightBG" src={rightBG} alt="" />
         {/* tempform*/}
         {/* <form
           className="p-6 flex flex-col max-w-sm gap-3"
@@ -130,7 +182,7 @@ export default function Home() {
           <button className="bg-white">Save to firestore</button>
         </form> */}
       </main>
-    </>
+    </Container>
   );
 }
 

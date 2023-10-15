@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import PreferenceNav from "./PreferenceNav/PreferenceNav";
 import Split from "react-split";
 import CodeMirror from "@uiw/react-codemirror";
@@ -6,17 +6,112 @@ import { vscodeDark } from "@uiw/codemirror-theme-vscode";
 import { javascript } from "@codemirror/lang-javascript";
 import EditorFooter from "./EditorFooter";
 import { Problem } from "@/utils/types/problem";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth, firestore } from "@/firebase/firebase";
+import { toast } from "react-toastify";
+import { problems } from "@/utils/problems";
+import { useRouter } from "next/router";
+import { arrayUnion, doc, updateDoc } from "firebase/firestore";
+import useLocalStorage from "@/hooks/useLocalStorage";
 
 type Props = {
   problem: Problem;
+  setSuccess: React.Dispatch<React.SetStateAction<boolean>>;
+  setSolved: React.Dispatch<React.SetStateAction<boolean>>;
 };
 
-const Playground: React.FC<Props> = ({ problem }) => {
+export interface ISettings {
+  fontSize: string;
+  settingsModalIsOpen: boolean;
+  dropdownIsOpen: boolean;
+}
+
+const Playground: React.FC<Props> = ({ problem, setSuccess, setSolved }) => {
   const [activeTestCase, setActiveTestCase] = useState<number>(0);
+  var [userCode, setUserCode] = useState<string>(problem.starterCode);
+  const [fontSize, setFontSize] = useLocalStorage("lcc-fontSize", "16px");
+
+  const [settings, setSettings] = useState<ISettings>({
+    fontSize: fontSize,
+    settingsModalIsOpen: false,
+    dropdownIsOpen: false,
+  });
+
   const boilerplate = problem.starterCode;
+  const [user] = useAuthState(auth);
+  const {
+    query: { pid },
+  } = useRouter();
+
+  useEffect(() => {
+    const code = localStorage.getItem(`code-${pid}`);
+    if (user) {
+      setUserCode(code ? JSON.parse(code) : problem.starterCode);
+    } else {
+      setUserCode(problem.starterCode);
+    }
+  }, [pid, user, problem.starterCode]);
+
+  const onChange = (value: string) => {
+    setUserCode(value);
+    localStorage.setItem(`code-${pid}`, JSON.stringify(value));
+  };
+  const handleSubmit = async () => {
+    if (!user) {
+      toast.error("Please log in to submit your code", {
+        position: "top-center",
+        theme: "dark",
+      });
+      return;
+    }
+    try {
+      userCode = userCode.slice(userCode.indexOf(problem.starterFunctionName));
+      const cb = new Function(`return ${userCode}`)();
+      const handler = problems[pid as string].handlerFunction;
+
+      if (typeof handler === "function") {
+        const success = handler(cb);
+        if (success) {
+          toast.success("Congrats! All tests case passed", {
+            position: "top-center",
+            autoClose: 3000,
+            theme: "dark",
+          });
+          setSuccess(true);
+          setTimeout(() => {
+            setSuccess(false);
+          }, 4000);
+          const userRef = doc(firestore, "users", user.uid);
+          await updateDoc(userRef, {
+            solvedProblems: arrayUnion(pid),
+          });
+          setSolved(true);
+        }
+      }
+    } catch (error: any) {
+      console.log(error);
+      if (
+        error.message.startsWith(
+          "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:"
+        )
+      ) {
+        toast.error("Oops! One or more test cases failed", {
+          position: "top-center",
+          autoClose: 3000,
+          theme: "dark",
+        });
+      } else {
+        toast.error(error.message, {
+          position: "top-center",
+          autoClose: 3000,
+          theme: "dark",
+        });
+      }
+    }
+  };
   return (
     <div className="flex flex-col bg-dark-layer-1 relative overflow-x-hidden">
-      <PreferenceNav />
+      <PreferenceNav settings={settings} setSettings={setSettings} />
       <Split
         className="h-[calc(100vh-94px)]"
         direction="vertical"
@@ -24,10 +119,11 @@ const Playground: React.FC<Props> = ({ problem }) => {
       >
         <div className="w-full overflow-auto">
           <CodeMirror
-            value={boilerplate}
+            value={userCode}
             theme={vscodeDark}
             extensions={[javascript()]}
-            style={{ fontSize: 16 }}
+            style={{ fontSize: settings.fontSize }}
+            onChange={onChange}
           />
         </div>
         <div className="w-full px-5 overflow-auto">
@@ -73,7 +169,7 @@ const Playground: React.FC<Props> = ({ problem }) => {
           </div>
         </div>
       </Split>
-      <EditorFooter />
+      <EditorFooter handleSubmit={handleSubmit} />
     </div>
   );
 };
